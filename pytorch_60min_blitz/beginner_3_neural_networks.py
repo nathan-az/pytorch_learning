@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-class Net(nn.Module):
 
+class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         # 1 input image channel, 6 output channels (filters), 3x3 square convolution kernel
@@ -33,6 +33,7 @@ class Net(nn.Module):
         for s in size:
             num_features *= s
         return num_features
+
 
 net = Net()
 # print(net)
