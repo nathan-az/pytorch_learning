@@ -1,5 +1,6 @@
 import torch.nn as nn
 
+
 def init_weights(m):
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:

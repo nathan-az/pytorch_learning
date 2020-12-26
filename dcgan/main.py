@@ -20,7 +20,9 @@ config = get_config()
 random.seed(config["seed"])
 torch.manual_seed(config["seed"])
 
-device = torch.device("cuda:0" if (torch.cuda.is_available() and config["n_gpus"] > 0) else "cpu")
+device = torch.device(
+    "cuda:0" if (torch.cuda.is_available() and config["n_gpus"] > 0) else "cpu"
+)
 discriminator = Discriminator(config["n_gpus"]).to(device)
 generator = Generator(config["n_gpus"]).to(device)
 
