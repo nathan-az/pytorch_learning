@@ -6,6 +6,9 @@ __pycache__/
 # Pycharm files
 .idea/
 
+# Data folders because git does not like 11GB of images
+dcgan/data/
+
 # C extensions
 *.so
 
@@ -40,7 +43,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit test.txt / coverage reports
 htmlcov/
 .tox/
 .nox/

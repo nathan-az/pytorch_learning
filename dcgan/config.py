@@ -1,7 +1,8 @@
 _config = dict(
     seed=100,
     dataroot="data/celeba",
-    workers=2,
+    # seems to be a bug setting cpu workers >0 on Windows
+    workers=0,
     batch_size=128,
     image_size=64,
     nc=3,
@@ -10,7 +11,7 @@ _config = dict(
     nz=100,
     ngf=64,
     ndf=64,
-    num_epochs=5,
+    num_epochs=2,
     lr=0.0002,
     beta1=0.5,
     n_gpus=1,
