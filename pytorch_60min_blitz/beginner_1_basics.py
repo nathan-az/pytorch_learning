@@ -58,7 +58,9 @@ def main():
     y.add_(x)
     print(f"x+y: {y}")
 
-    print("Any operations mutating a tensor in-place are suffixed with an underscore '_'")
+    print(
+        "Any operations mutating a tensor in-place are suffixed with an underscore '_'"
+    )
 
     print("Examples of slicing (numpy notation) and resizing (tensor.view)")
     x = torch.randn(4, 4)
@@ -68,7 +70,7 @@ def main():
     print("x[2:]:", x[2:])
     print(x.size(), y.size(), z.size())
 
-    print("-"*8, "torch -> numpy bridge:", "-"*8)
+    print("-" * 8, "torch -> numpy bridge:", "-" * 8)
     a = torch.ones(5)
     b = a.numpy()
     print(a)
