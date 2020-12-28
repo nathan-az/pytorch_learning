@@ -1,7 +1,8 @@
 _config = dict(
-    seed=100,
+    seed=999,
     dataroot="data/celeba",
-    workers=2,
+    # seems to be a bug setting cpu workers >0 on Windows
+    workers=0,
     batch_size=128,
     image_size=64,
     nc=3,

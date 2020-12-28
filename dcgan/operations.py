@@ -1,4 +1,8 @@
 import torch.nn as nn
+import matplotlib.pyplot as plt
+import torchvision.utils as vutils
+import numpy as np
+from sklearn import metrics
 
 
 def init_weights(m):
@@ -8,3 +12,18 @@ def init_weights(m):
     if classname.find("BatchNorm") != -1:
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
+
+
+def print_random_grid(data, device):
+    plt.figure(figsize=(8, 8))
+    plt.axis("off")
+    plt.title("Training Images")
+    plt.imshow(
+        np.transpose(
+            vutils.make_grid(data[0].to(device)[:64], padding=2, normalize=True).cpu(),
+            (1, 2, 0),
+        )
+    )
+
+def get_auc(labels, pred_scores):
+    return metrics.roc_auc_score(labels, pred_scores)

@@ -9,7 +9,7 @@ class Generator(nn.Module):
     def __init__(self, n_gpus: int):
         super(Generator, self).__init__()
         self.n_gpus = n_gpus
-        self.relu = nn.ReLU(True)
+        self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
         self.convT_1 = nn.ConvTranspose2d(
             in_channels=config["nz"],
@@ -117,7 +117,8 @@ class Discriminator(nn.Module):
         self.bn_4 = nn.BatchNorm2d(num_features=config["ndf"] * 8)
 
     def forward(self, x):
-        x = self.leaky_relu(self.bn_1(self.conv1(x)))
+        x = self.leaky_relu(self.conv1(x))
+        # x = self.leaky_relu(self.bn_1(self.conv1(x)))
         x = self.leaky_relu(self.bn_2(self.conv2(x)))
         x = self.leaky_relu(self.bn_3(self.conv3(x)))
         x = self.leaky_relu(self.bn_4(self.conv4(x)))
