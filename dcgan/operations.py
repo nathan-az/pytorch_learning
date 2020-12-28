@@ -2,6 +2,7 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 import numpy as np
+from sklearn import metrics
 
 
 def init_weights(m):
@@ -23,3 +24,6 @@ def print_random_grid(data, device):
             (1, 2, 0),
         )
     )
+
+def get_auc(labels, pred_scores):
+    return metrics.roc_auc_score(labels, pred_scores)
