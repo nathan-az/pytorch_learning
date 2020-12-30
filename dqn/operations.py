@@ -10,6 +10,7 @@ import torchvision.transforms as T
 import torch
 import torch.nn.functional as F
 
+from dqn.config import TrainConfig
 
 Transition = namedtuple("Transition", ("state", "action", "reward", "next_state"))
 
@@ -154,7 +155,7 @@ def train_model(
     target_net,
     optimiser,
     memory,
-    config,
+    config: TrainConfig,
     save_model=False,
     enable_plot_durations=False,
     episode_durations=[],
@@ -210,10 +211,10 @@ def train_model(
 
         if i % config.TARGET_UPDPATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
-    if save_model and config.SAVE_PATH != "":
-        torch.save(target_net.state_dict(), config.SAVE_PATH+"_final.pth")
-    if config.SAVE_BEST_MODEL and config.SAVE_PATH != "":
-        torch.save(best_params, config.SAVE_PATH + "_best.pth")
+    if save_model and config.SAVE_NAME != "":
+        torch.save(target_net.state_dict(), config.SAVE_NAME+"_final.pth")
+    if config.SAVE_BEST_MODEL and config.SAVE_NAME != "":
+        torch.save(best_params, config.SAVE_NAME + "_best.pth")
 
 
 def test_model(
