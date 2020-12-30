@@ -1,7 +1,5 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import namedtuple
 import random
 from operations import Transition
 
@@ -34,14 +32,14 @@ class ReplayMemory:
 
 
 class DQN(nn.Module):
-    def __init__(self, h, w, outputs):
+    def __init__(self, c, h, w, outputs):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(in_channels=c, out_channels=16, kernel_size=5, stride=2)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=5, stride=2)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, stride=2)
+        self.bn3 = nn.BatchNorm2d(64)
 
         def conv2d_size_out(size, kernel_size=5, stride=2):
             return (size - kernel_size) // stride + 1
@@ -49,7 +47,7 @@ class DQN(nn.Module):
         conv_w = conv2d_size_out(conv2d_size_out(conv2d_size_out(w)))
         conv_h = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)))
 
-        self.head = nn.Linear(conv_w * conv_h * 32, outputs)
+        self.head = nn.Linear(conv_w * conv_h * 64, outputs)
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))

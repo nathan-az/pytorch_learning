@@ -10,9 +10,6 @@ import torchvision.transforms as T
 import torch
 import torch.nn.functional as F
 
-resize = T.Compose(
-    [T.ToPILImage(), T.Resize(40, interpolation=Image.CUBIC), T.ToTensor()]
-)
 
 Transition = namedtuple("Transition", ("state", "action", "reward", "next_state"))
 
@@ -38,26 +35,43 @@ def get_cart_location(env, screen_width):
     return int(env.state[0] * scale + screen_width / 2.0)
 
 
-def get_screen(env, device=get_device()):
+def get_screen(env, config, device=get_device()):
     # transpose (h,w,c) to (c,h,w)
     screen = env.render(mode="rgb_array").transpose((2, 0, 1))
     _, screen_height, screen_width = screen.shape
     # trim screen, don't need all height or width since game fails with too much sway vertically and cart in lower half
     screen = screen[:, int(screen_height * 0.4) : int(screen_height * 0.8)]
-    view_width = int(screen_width * 0.6)
-    cart_location = get_cart_location(env, screen_width)
-    if cart_location < view_width // 2:
-        slice_range = slice(view_width)
-    elif cart_location > (screen_width - view_width // 2):
-        slice_range = slice(-view_width, None)
-    else:
-        slice_range = slice(
-            cart_location - view_width // 2, cart_location + view_width // 2
-        )
 
-    screen = screen[:, :, slice_range]
+    if config.TRIM_WIDTH:
+        view_width = int(screen_width * 0.6)
+        cart_location = get_cart_location(env, screen_width)
+        if cart_location < view_width // 2:
+            slice_range = slice(view_width)
+        elif cart_location > (screen_width - view_width // 2):
+            slice_range = slice(-view_width, None)
+        else:
+            slice_range = slice(
+                cart_location - view_width // 2, cart_location + view_width // 2
+            )
+
+        screen = screen[:, :, slice_range]
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255.0
     screen = torch.from_numpy(screen)
+
+    if config.GRAYSCALE:
+        resize = T.Compose(
+            [
+                T.ToPILImage(),
+                T.Grayscale(1),
+                T.Resize(40, interpolation=Image.CUBIC),
+                T.ToTensor(),
+            ]
+        )
+    else:
+        resize = T.Compose(
+            [T.ToPILImage(), T.Resize(40, interpolation=Image.CUBIC), T.ToTensor()]
+        )
+
     return resize(screen).unsqueeze(0).to(device)
 
 
@@ -70,7 +84,7 @@ def select_action(
     )
     if sample > eps_threshold:
         with torch.no_grad():
-            return policy_net(state).max(1)[1].view(1, 1)
+            return policy_net(state.to(device)).max(1)[1].view(1, 1)
     else:
         return torch.tensor(
             [[random.randrange(n_actions)]], device=device, dtype=torch.long
@@ -132,23 +146,23 @@ def optimise_model(
 
 
 def train_model(
-    num_episodes,
     env,
     policy_net,
     target_net,
     optimiser,
     memory,
     config,
+    save_model=False,
     enable_plot_durations=False,
     episode_durations=[],
     device=get_device(),
 ):
     steps_done = 0
     n_actions = get_num_actions(env)
-    for i in range(num_episodes):
+    for i in range(config.NUM_EPISODES):
         env.reset()
-        last_screen = get_screen(env)
-        current_screen = get_screen(env)
+        last_screen = get_screen(env, config)
+        current_screen = get_screen(env, config)
         state = current_screen - last_screen
         for t in count():
             action = select_action(
@@ -158,7 +172,7 @@ def train_model(
             reward = torch.tensor([reward], device=device)
 
             last_screen = current_screen
-            current_screen = get_screen(env)
+            current_screen = get_screen(env, config)
 
             if not done:
                 next_state = current_screen - last_screen
@@ -171,7 +185,8 @@ def train_model(
 
             optimise_model(policy_net, target_net, optimiser, memory, config)
 
-            steps_done += 1
+            if config.DECAY_BY == "step":
+                steps_done += 1
 
             if done:
                 episode_durations.append(t + 1)
@@ -179,8 +194,57 @@ def train_model(
                     plot_durations(episode_durations)
                 break
 
+        if config.DECAY_BY == "episode":
+            steps_done += 1
+
         if i % config.TARGET_UPDPATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
-        # print(
-        #     f"[{i}/{num_episodes}]: {np.mean(episode_durations[-1 * max(len(episode_durations), 10):])}"
-        # )
+    if save_model and config.SAVE_PATH != "":
+        torch.save(policy_net.state_dict(config.SAVE_PATH))
+
+
+def test_model(
+    env,
+    trained_net,
+    config,
+    enable_plot_durations=False,
+    episode_durations=[],
+):
+    steps_done = 0
+    n_actions = get_num_actions(env)
+    trained_net.eval()
+    with torch.no_grad():
+        for i in range(config.NUM_EPISODES):
+            env.reset()
+            last_screen = get_screen(env, config)
+            current_screen = get_screen(env, config)
+            state = current_screen - last_screen
+            for t in count():
+                action = select_action(
+                    state,
+                    trained_net,
+                    n_actions,
+                    steps_done,
+                    config,
+                    device=get_device(),
+                )
+                _, _, done, _ = env.step(action.item())
+
+                last_screen = current_screen
+                current_screen = get_screen(env, config)
+
+                if not done:
+                    next_state = current_screen - last_screen
+                else:
+                    next_state = None
+
+                state = next_state
+
+                if done:
+                    episode_durations.append(t + 1)
+                    if enable_plot_durations:
+                        plot_durations(episode_durations)
+                    break
+
+            if config.DECAY_BY == "episode":
+                steps_done += 1
