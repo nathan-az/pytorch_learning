@@ -53,8 +53,8 @@ generator.apply(init_weights)
 criterion = nn.BCELoss()
 
 fixed_noise = torch.randn(64, config["nz"], 1, 1, device=device)
-label_real = 1.
-label_fake = 0.
+label_real = 1.0
+label_fake = 0.0
 
 optimiser_dis = optim.Adam(
     discriminator.parameters(), lr=config["lr"], betas=(config["beta1"], 0.999)
@@ -136,7 +136,7 @@ for epoch in range(config["num_epochs"]):
                 f"D(x): {D_x:.2f}",
                 f"D(G(z))_1: {D_G_z_1:.2f} -> D(G(Z))_2: {D_G_z_2:.2f}",
                 f"auc: {auc:.2f}",
-                sep="\t"
+                sep="\t",
             )
 
         if i % 500 == 0 or (

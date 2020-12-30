@@ -25,5 +25,6 @@ def print_random_grid(data, device):
         )
     )
 
+
 def get_auc(labels, pred_scores):
     return metrics.roc_auc_score(labels, pred_scores)
