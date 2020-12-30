@@ -8,6 +8,7 @@ __pycache__/
 
 # Data folders because git does not like 11GB of images
 dcgan/data/
+marionet/checkpoints
 
 # Ignore saving models
 *.pth
