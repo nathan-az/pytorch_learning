@@ -91,6 +91,9 @@ def select_action(
         )
 
 
+def get_moving_average_duration(durations, period):
+    return np.mean(durations[-period:])
+
 def plot_durations(episode_durations):
     plt.figure(2)
     plt.clf()
@@ -159,6 +162,8 @@ def train_model(
 ):
     steps_done = 0
     n_actions = get_num_actions(env)
+    best_period = 0
+    best_params = target_net.state_dict()
     for i in range(config.NUM_EPISODES):
         env.reset()
         last_screen = get_screen(env, config)
@@ -188,6 +193,12 @@ def train_model(
             if config.DECAY_BY == "step":
                 steps_done += 1
 
+            if (i > 100):
+                current_moving_avg = max(best_period, get_moving_average_duration(episode_durations, 100))
+                if current_moving_avg > best_period:
+                    best_period = current_moving_avg
+                    best_params = target_net.state_dict()
+
             if done:
                 episode_durations.append(t + 1)
                 if enable_plot_durations:
@@ -200,7 +211,9 @@ def train_model(
         if i % config.TARGET_UPDPATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
     if save_model and config.SAVE_PATH != "":
-        torch.save(policy_net.state_dict(config.SAVE_PATH))
+        torch.save(target_net.state_dict(), config.SAVE_PATH+"_final.pth")
+    if config.SAVE_BEST_MODEL and config.SAVE_PATH != "":
+        torch.save(best_params, config.SAVE_PATH + "_best.pth")
 
 
 def test_model(
@@ -212,7 +225,6 @@ def test_model(
 ):
     steps_done = 0
     n_actions = get_num_actions(env)
-    trained_net.eval()
     with torch.no_grad():
         for i in range(config.NUM_EPISODES):
             env.reset()

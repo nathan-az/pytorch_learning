@@ -32,6 +32,7 @@ train_model(
     policy_net=policy_net,
     target_net=target_net,
     optimiser=optimiser,
+    save_model=True,
     memory=memory,
     config=config,
     enable_plot_durations=True,
