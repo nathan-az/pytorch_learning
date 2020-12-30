@@ -194,16 +194,16 @@ def train_model(
             if config.DECAY_BY == "step":
                 steps_done += 1
 
-            if (i > 100):
-                current_moving_avg = max(best_period, get_moving_average_duration(episode_durations, 100))
-                if current_moving_avg > best_period:
-                    best_period = current_moving_avg
-                    best_params = target_net.state_dict()
-
             if done:
                 episode_durations.append(t + 1)
                 if enable_plot_durations:
                     plot_durations(episode_durations)
+
+                if (i > 100):
+                    current_moving_avg = max(best_period, get_moving_average_duration(episode_durations, 100))
+                    if current_moving_avg > best_period:
+                        best_period = current_moving_avg
+                        best_params = target_net.state_dict()
                 break
 
         if config.DECAY_BY == "episode":
