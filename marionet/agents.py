@@ -89,13 +89,13 @@ class Mario:
     def recall(self):
         batch = random.sample(self.memory, self.batch_size)
         state, action, reward, next_state, done = map(torch.stack, zip(*batch))
-        return state, action.squeeze, reward.squeeze, next_state, done
+        return state, action.squeeze(), reward.squeeze(), next_state, done
 
     def td_estimate(self, state, action):
         # below notation means run the net on the state vector, get the # corresponding ot batch_size
         # and corresponding to the specific action
         current_Q = self.net(state, model_type="online")[
-            np.arange(self.batch_size), action
+            np.arange(0, self.batch_size), action
         ]
         return current_Q
 
