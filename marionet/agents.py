@@ -9,7 +9,14 @@ from marionet.models import MarioNet
 
 class Mario:
     def __init__(
-        self, state_dim, action_dim, save_dir, memory_capacity=100000, batch_size=32
+        self,
+        state_dim,
+        action_dim,
+        save_dir,
+        memory_in_gpu=False,
+        memory_capacity=32000,
+        batch_size=32,
+        force_disable_cuda=False
     ):
         # INPUT
         self.state_dim = state_dim
@@ -17,9 +24,13 @@ class Mario:
         self.save_dir = save_dir
 
         # SETTINGS
+        # TODO: remove override
         self.use_cuda = torch.cuda.is_available()
+        if force_disable_cuda:
+            self.use_cuda = False
         self.net: MarioNet = MarioNet(self.state_dim, self.action_dim).float()
         self.memory = deque(maxlen=memory_capacity)
+        self.memory_in_gpu = memory_in_gpu
         self.batch_size = batch_size
 
         if self.use_cuda:
@@ -33,7 +44,7 @@ class Mario:
 
         # Q LEARNING PARAMS
         self.gamma = 0.9
-        self.burnin = 1e4  # min experiences before training
+        self.burnin = 1e5  # min experiences before training
         self.learn_every = 3  # avoids training on every frame
         self.sync_every = 1e4  # delay between sync of online and target models
 
@@ -41,14 +52,14 @@ class Mario:
         self.optimiser = torch.optim.Adam(self.net.parameters(), lr=0.00025)
         self.loss_fn = torch.nn.SmoothL1Loss()
 
-        self.save_every = 5e5
+        self.save_every = 1e5
 
     def act(self, state):
         if np.random.rand() < self.exploration_rate:
             action_idx = np.random.randint(self.action_dim)
 
         else:
-            state = torch.tensor(state.__array__())
+            state = torch.FloatTensor(state)
             if self.use_cuda:
                 state = state.cuda()
             state = state.unsqueeze(0)
@@ -60,16 +71,13 @@ class Mario:
         return action_idx
 
     def cache(self, state, action, reward, next_state, done):
-        state = state.__array__()
-        next_state = next_state.__array__()
+        state = torch.FloatTensor(state)
+        next_state = torch.FloatTensor(next_state)
+        action = torch.LongTensor([action])
+        reward = torch.DoubleTensor([reward])
+        done = torch.BoolTensor([done])
 
-        state = torch.tensor(state)
-        next_state = torch.tensor(next_state)
-        action = torch.tensor([action])
-        reward = torch.tensor([reward])
-        done = torch.tensor([done])
-
-        if self.use_cuda:
+        if self.use_cuda and self.memory_in_gpu:
             state = state.cuda()
             next_state = next_state.cuda()
             action = action.cuda()
@@ -89,7 +97,13 @@ class Mario:
     def recall(self):
         batch = random.sample(self.memory, self.batch_size)
         state, action, reward, next_state, done = map(torch.stack, zip(*batch))
-        return state, action.squeeze(), reward.squeeze(), next_state, done
+        if self.use_cuda and not self.memory_in_gpu:
+            state = state.cuda()
+            next_state = next_state.cuda()
+            action = action.cuda()
+            reward = reward.cuda()
+            done = done.cuda()
+        return state, action.squeeze(), reward.squeeze(), next_state, done.squeeze()
 
     def td_estimate(self, state, action):
         # below notation means run the net on the state vector, get the # corresponding ot batch_size
@@ -106,7 +120,6 @@ class Mario:
         next_Q = self.net(next_state, model_type="target")[
             np.arange(0, self.batch_size), best_action
         ]
-
         return (reward + (1 - done.float()) * self.gamma * next_Q).float()
 
     def update_Q_online(self, td_estimate, td_target):
@@ -139,7 +152,7 @@ class Mario:
         if self.curr_step % self.learn_every != 0:
             return None, None
 
-        state, action, next_state, reward, done = self.recall()
+        state, action, reward, next_state, done = self.recall()
         td_estimate = self.td_estimate(state, action)
         td_target = self.td_target(reward, next_state, done)
 
