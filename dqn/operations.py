@@ -10,6 +10,7 @@ import torchvision.transforms as T
 import torch
 import torch.nn.functional as F
 
+from dqn.config import TrainConfig
 
 Transition = namedtuple("Transition", ("state", "action", "reward", "next_state"))
 
@@ -35,14 +36,14 @@ def get_cart_location(env, screen_width):
     return int(env.state[0] * scale + screen_width / 2.0)
 
 
-def get_screen(env, config, device=get_device()):
+def get_screen(env, config, force_trim_width=False, device=get_device()):
     # transpose (h,w,c) to (c,h,w)
     screen = env.render(mode="rgb_array").transpose((2, 0, 1))
     _, screen_height, screen_width = screen.shape
     # trim screen, don't need all height or width since game fails with too much sway vertically and cart in lower half
     screen = screen[:, int(screen_height * 0.4) : int(screen_height * 0.8)]
 
-    if config.TRIM_WIDTH:
+    if config.TRIM_WIDTH or force_trim_width:
         view_width = int(screen_width * 0.6)
         cart_location = get_cart_location(env, screen_width)
         if cart_location < view_width // 2:
@@ -75,20 +76,30 @@ def get_screen(env, config, device=get_device()):
     return resize(screen).unsqueeze(0).to(device)
 
 
+def get_epsilon(steps_done, config):
+    eps_threshold = config.EPS_END + (config.EPS_START - config.EPS_END) * math.exp(
+        -1.0 * steps_done / config.EPS_DECAY
+    )
+    return eps_threshold
+
+
 def select_action(
     state, policy_net, n_actions, steps_done, config, device=get_device()
 ):
     sample = random.random()
-    eps_threshold = config.EPS_END + (config.EPS_START - config.EPS_END) * math.exp(
-        -1.0 * steps_done / config.EPS_DECAY
-    )
+    eps_threshold = get_epsilon(steps_done, config)
     if sample > eps_threshold:
         with torch.no_grad():
+            values = policy_net(state.to(device))
             return policy_net(state.to(device)).max(1)[1].view(1, 1)
     else:
         return torch.tensor(
             [[random.randrange(n_actions)]], device=device, dtype=torch.long
         )
+
+
+def get_moving_average_duration(durations, period):
+    return np.mean(durations[-period:])
 
 
 def plot_durations(episode_durations):
@@ -125,7 +136,7 @@ def optimise_model(
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
 
-    state_action_values = policy_net(state_batch).to(device).gather(1, action_batch)
+    state_action_values = policy_net(state_batch).gather(1, action_batch)
 
     next_state_values = torch.zeros(config.BATCH_SIZE, device=device)
     next_state_values[non_final_mask] = (
@@ -151,7 +162,7 @@ def train_model(
     target_net,
     optimiser,
     memory,
-    config,
+    config: TrainConfig,
     save_model=False,
     enable_plot_durations=False,
     episode_durations=[],
@@ -159,6 +170,9 @@ def train_model(
 ):
     steps_done = 0
     n_actions = get_num_actions(env)
+    best_episode = 0
+    best_period = 0
+    best_params = target_net.state_dict()
     for i in range(config.NUM_EPISODES):
         env.reset()
         last_screen = get_screen(env, config)
@@ -192,6 +206,15 @@ def train_model(
                 episode_durations.append(t + 1)
                 if enable_plot_durations:
                     plot_durations(episode_durations)
+
+                if i > 100:
+                    current_moving_avg = get_moving_average_duration(
+                        episode_durations, 100
+                    )
+                    if current_moving_avg > best_period:
+                        best_episode = i
+                        best_period = current_moving_avg
+                        best_params = policy_net.state_dict()
                 break
 
         if config.DECAY_BY == "episode":
@@ -199,8 +222,14 @@ def train_model(
 
         if i % config.TARGET_UPDPATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
-    if save_model and config.SAVE_PATH != "":
-        torch.save(policy_net.state_dict(config.SAVE_PATH))
+    if save_model and config.SAVE_NAME != "":
+        torch.save(policy_net.state_dict(), config.SAVE_NAME + "_final.pth")
+    if config.SAVE_BEST_MODEL and config.SAVE_NAME != "":
+        torch.save(best_params, config.SAVE_NAME + "_best.pth")
+    print(f"Best 100 episode moving average: {best_period} (episode {best_episode})")
+    print(
+        f"Final 100 episode moving average: {current_moving_avg} (episode {config.NUM_EPISODES})"
+    )
 
 
 def test_model(
@@ -212,39 +241,38 @@ def test_model(
 ):
     steps_done = 0
     n_actions = get_num_actions(env)
-    trained_net.eval()
-    with torch.no_grad():
-        for i in range(config.NUM_EPISODES):
-            env.reset()
-            last_screen = get_screen(env, config)
+    for i in range(config.NUM_EPISODES):
+        env.reset()
+        last_screen = get_screen(env, config)
+        current_screen = get_screen(env, config)
+        state = current_screen - last_screen
+        for t in count():
+            action = select_action(
+                state,
+                trained_net,
+                n_actions,
+                steps_done,
+                config,
+                device=get_device(),
+            )
+            _, _, done, _ = env.step(action.item())
+
+            last_screen = current_screen
             current_screen = get_screen(env, config)
-            state = current_screen - last_screen
-            for t in count():
-                action = select_action(
-                    state,
-                    trained_net,
-                    n_actions,
-                    steps_done,
-                    config,
-                    device=get_device(),
-                )
-                _, _, done, _ = env.step(action.item())
 
-                last_screen = current_screen
-                current_screen = get_screen(env, config)
+            if not done:
+                next_state = current_screen - last_screen
+            else:
+                next_state = None
 
-                if not done:
-                    next_state = current_screen - last_screen
-                else:
-                    next_state = None
+            state = next_state
 
-                state = next_state
+            if done:
+                episode_durations.append(t + 1)
+                if enable_plot_durations:
+                    plot_durations(episode_durations)
+                break
 
-                if done:
-                    episode_durations.append(t + 1)
-                    if enable_plot_durations:
-                        plot_durations(episode_durations)
-                    break
-
-            if config.DECAY_BY == "episode":
-                steps_done += 1
+        if config.DECAY_BY == "episode":
+            steps_done += 1
+    print(np.mean(episode_durations))

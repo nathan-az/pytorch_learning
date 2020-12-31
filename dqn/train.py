@@ -7,16 +7,25 @@ from dqn.config import get_train_config
 from dqn.operations import get_screen, get_num_actions, train_model
 from models import DQN, ReplayMemory
 
+import matplotlib.pyplot as plt
+
 
 env = gym.make("CartPole-v0").unwrapped
 env.reset()
 config = get_train_config()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+plt.figure()
+plt.imshow(
+    get_screen(env, config).cpu().squeeze(0).permute(1, 2, 0).numpy(),
+    interpolation="none",
+)
+plt.title("Example extracted screen")
+plt.show()
+
 init_screen = get_screen(env, config)
 _, channels, screen_height, screen_width = init_screen.shape
 num_actions = get_num_actions(env)
-
 
 policy_net = DQN(channels, screen_height, screen_width, num_actions).to(device)
 target_net = DQN(channels, screen_height, screen_width, num_actions).to(device)
@@ -32,6 +41,7 @@ train_model(
     policy_net=policy_net,
     target_net=target_net,
     optimiser=optimiser,
+    save_model=True,
     memory=memory,
     config=config,
     enable_plot_durations=True,

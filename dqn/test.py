@@ -17,7 +17,8 @@ _, channels, screen_height, screen_width = init_screen.shape
 num_actions = get_num_actions(env)
 
 trained_net = DQN(channels, screen_height, screen_width, num_actions).to(device)
-trained_net.load_state_dict(torch.load(config.SAVE_PATH))
+trained_net.load_state_dict(torch.load(config.MODEL_PATH))
+trained_net.eval()
 
 episode_durations = []
 test_model(
